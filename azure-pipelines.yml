@@ -1,0 +1,34 @@
+# Docker
+# Build a Docker image 
+# https://docs.microsoft.com/azure/devops/pipelines/languages/docker
+
+trigger:
+- master
+
+variables:
+  tag: '$(Build.BuildId)'
+
+steps:
+- task: Docker@2
+  inputs:
+    command: 'build'
+    repository: 'rkalluru/k06-catalogue'
+    Dockerfile: '**/Dockerfile'
+  displayName: "Docker Build"
+- task: Docker@2
+  inputs:
+    containerRegistry: 'DockerHub'
+    repository: 'rkalluru/k06-catalogue'
+    command: 'Push'
+    Dockerfile: '**/Dockerfile'
+  displayName: "Docker Push"
+
+- task: Bash@3
+  inputs:
+    targetType: 'inline'
+    script: |
+      echo $(PAT) | az devops login --organization https://dev.azure.com/DevOps-Batches/
+      sed -i -e "s|IMAGENAME|rkalluru/k06-catalogue|" -e "s|IMAGETAG|$(Build.BuildId)|" helm/values.yaml
+      cp -r helm $(Build.ArtifactStagingDirectory)
+      cd $(Build.ArtifactStagingDirectory)
+      az artifacts universal publish --organization https://dev.azure.com/DevOps-Batches/ --project="K8S-06" --scope project --feed k06-roboshop --name helm-catalogue --version $(Build.BuildId).0.0 --description "Helm Chart" --path .
